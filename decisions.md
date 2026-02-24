@@ -35,14 +35,12 @@
 
 ```mermaid
 graph TD
-    Client[Браузер] -->|HTTP| Backend[Backend FastAPI]
-    Backend -->|HTML + JS| Client
+    Browser[Web Browser] -->|HTTP| Backend[Backend: FastAPI]
+    Backend -->|Serves HTML + JS| Browser
     Backend -->|SQL| PostgreSQL[(PostgreSQL)]
-    Backend -->|задачи| Redis[(Redis)]
-    Redis -->|очередь| Worker[Celery Worker]
-    Worker -->|чтение/запись| PostgreSQL
-    Worker -->|чтение PDF| Uploads[uploads/ на хосте]
-    Backend -->|чтение/запись файлов| Uploads
-    Backend -->|логи| Logs[logs/ на хосте]
-    Worker -->|логи| Logs
+    Backend -->|Tasks| Redis[(Redis)]
+    Redis -->|Queue| Worker[Celery Worker]
+    Worker -->|Reads/Writes| PostgreSQL
+    Worker -->|Reads PDF files| Uploads[Uploads folder on host]
+    Backend -->|Reads/Writes files| Uploads
 ```

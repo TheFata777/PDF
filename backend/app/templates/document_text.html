@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <h1>Текст документа</h1>
+    <p><a href="/dashboard">← Назад к списку документов</a></p>
+
+    <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+        <button id="keywords-btn" style="padding: 8px 15px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Ключевые слова</button>
+        <button id="frequencies-btn" style="padding: 8px 15px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Частотный анализ</button>
+    </div>
+
+    <div id="analysis-results" style="margin-bottom: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; display: none;"></div>
+
+    <div id="chunks">
+        <p>Загрузка текста документа...</p>
+    </div>
+</div>
+
+<style>
+    .error { color: #d32f2f; }
+    pre { white-space: pre-wrap; background: #f5f5f5; padding: 15px; border-radius: 4px; font-family: 'Courier New', monospace; }
+    .chunk-item { margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+    .chunk-header { font-weight: bold; margin-bottom: 10px; color: #333; }
+</style>
+
+<script>
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        window.location.href = '/';
+    }
+
+    const pathParts = window.location.pathname.split('/');
+    const docId = pathParts[2];
+
+    const analysisDiv = document.getElementById('analysis-results');
+    const chunksDiv = document.getElementById('chunks');
+
+    // Загрузка текста документа
+    fetch(`/documents/${docId}/text`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(res => {
+        if (!res.ok) throw new Error('Ошибка загрузки');
+        return res.json();
+    })
+    .then(chunks => {
+        if (chunks.length === 0) {
+            chunksDiv.innerHTML = '<p>Текст не найден (возможно, документ ещё обрабатывается).</p>';
+            return;
+        }
+        let html = '';
+        chunks.forEach(chunk => {
+            html += `
+                <div class="chunk-item">
+                    <div class="chunk-header">Страница ${chunk.page_number}, фрагмент ${chunk.chunk_index}</div>
+                    <pre>${escapeHtml(chunk.content)}</pre>
+                </div>
+            `;
+        });
+        chunksDiv.innerHTML = html;
+    })
+    .catch(err => {
+        chunksDiv.innerHTML = `<p class="error">Ошибка: ${err.message}</p>`;
+    });
+
+    // Экранирование HTML
+    function escapeHtml(unsafe) {
+        return unsafe.replace(/[&<>"']/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            if (m === '"') return '&quot;';
+            if (m === "'") return '&#039;';
+            return m;
+        });
+    }
+
+    // Ключевые слова
+    document.getElementById('keywords-btn').onclick = async () => {
+    analysisDiv.style.display = 'block';
+    analysisDiv.innerHTML = 'Загрузка...';
+    try {
+        const response = await fetch(`/documents/${docId}/keywords`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Ошибка загрузки ключевых слов');
+        const data = await response.json();
+        if (!data.keywords || data.keywords.length === 0) {
+            analysisDiv.innerHTML = '<p>Ключевые слова не найдены.</p>';
+            return;
+        }
+
+        // Нормализуем score: 0..1, где 1 – максимальная важность (минимальный score)
+        const scores = data.keywords.map(k => k.score);
+        const minScore = Math.min(...scores);
+        const maxScore = Math.max(...scores);
+        const range = maxScore - minScore;
+
+        const keywords = data.keywords.map(k => ({
+            keyword: k.keyword,
+            // Если все score одинаковы (range = 0), то все важны одинаково – ставим 100%
+            percent: range > 0 ? 100 * (1 - (k.score - minScore) / range) : 100
+        }));
+
+        // Сортируем по убыванию важности (по убыванию процента)
+        keywords.sort((a, b) => b.percent - a.percent);
+
+        let html = '<h3>Ключевые слова (релевантность в %):</h3><ul>';
+        keywords.forEach(item => {
+            const percent = item.percent.toFixed(1);
+            html += `<li><strong>${escapeHtml(item.keyword)}</strong> — ${percent}%</li>`;
+        });
+        html += '</ul>';
+        analysisDiv.innerHTML = html;
+    } catch (err) {
+        analysisDiv.innerHTML = `<p class="error">Ошибка: ${err.message}</p>`;
+    }
+};
+    // Частотный анализ
+    document.getElementById('frequencies-btn').onclick = async () => {
+        analysisDiv.style.display = 'block';
+        analysisDiv.innerHTML = 'Загрузка...';
+        try {
+            const response = await fetch(`/documents/${docId}/frequencies`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('Ошибка загрузки частот');
+            const data = await response.json();
+            if (!data.frequencies || data.frequencies.length === 0) {
+                analysisDiv.innerHTML = '<p>Частотный анализ не дал результатов.</p>';
+                return;
+            }
+            let html = '<h3>Частота слов (топ 30):</h3><ul>';
+            data.frequencies.forEach(item => {
+                html += `<li><strong>${escapeHtml(item.word)}</strong>: ${item.count}</li>`;
+            });
+            html += '</ul>';
+            analysisDiv.innerHTML = html;
+        } catch (err) {
+            analysisDiv.innerHTML = `<p class="error">Ошибка: ${err.message}</p>`;
+        }
+    };
+</script>
+{% endblock %}

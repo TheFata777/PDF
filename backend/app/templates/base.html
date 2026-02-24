@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Knowledge Engine</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        nav { margin-bottom: 20px; }
+        nav a { margin-right: 10px; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">Главная</a>
+        <a href="/dashboard">Документы</a>
+        <a href="/search">Поиск</a>
+        <a href="/collections">Коллекции</a>
+        <a href="#" id="logout-link" style="display:none;">Выйти</a>
+    </nav>
+    <hr>
+    <div id="content">
+        {% block content %}{% endblock %}
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('access_token');
+            const logoutLink = document.getElementById('logout-link');
+            if (token) {
+                logoutLink.style.display = 'inline';
+                logoutLink.onclick = function(e) {
+                    e.preventDefault();
+                    localStorage.removeItem('access_token');
+                    window.location.href = '/';
+                };
+            } else {
+                logoutLink.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

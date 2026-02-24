@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Мои коллекции</h1>
+
+<div>
+    <h2>Создать коллекцию</h2>
+    <form id="create-collection-form">
+        <div>
+            <label>Название:</label>
+            <input type="text" id="name" required>
+        </div>
+        <div>
+            <label>Описание:</label>
+            <textarea id="description"></textarea>
+        </div>
+        <button type="submit">Создать</button>
+    </form>
+    <div id="message"></div>
+</div>
+
+<hr>
+
+<h2>Список коллекций</h2>
+<div id="collections-list"></div>
+
+<script>
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        window.location.href = '/';
+    }
+
+    const collectionsDiv = document.getElementById('collections-list');
+
+    // Загрузка списка коллекций
+    async function loadCollections() {
+        try {
+            const response = await fetch('/api/collections/', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            const collections = await response.json();
+            console.log('Collections:', collections); // отладка
+
+            if (collections.length === 0) {
+                collectionsDiv.innerHTML = '<p>У вас нет коллекций.</p>';
+                return;
+            }
+            let html = '<ul>';
+            collections.forEach(c => {
+                html += `<li>
+                    <strong><a href="/collections/${c.id}">${escapeHtml(c.name) || 'Без названия'}</a></strong>
+                    <p>${escapeHtml(c.description || '')}</p>
+                    <small>Документов: ${c.documents ? c.documents.length : 0}</small>
+                    <button onclick="deleteCollection(${c.id})">Удалить</button>
+                </li>`;
+            });
+            html += '</ul>';
+            collectionsDiv.innerHTML = html;
+        } catch (err) {
+            console.error('Error loading collections:', err);
+            collectionsDiv.innerHTML = `<p class="error">Ошибка загрузки: ${err.message}</p>`;
+        }
+    }
+
+    // Удаление коллекции
+    async function deleteCollection(id) {
+        if (!confirm('Удалить коллекцию?')) return;
+        try {
+            const response = await fetch(`/api/collections/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                loadCollections();
+            } else {
+                const data = await response.json();
+                alert(`Ошибка: ${data.detail || 'Не удалось удалить'}`);
+            }
+        } catch (err) {
+            alert(`Ошибка: ${err.message}`);
+        }
+    }
+
+    // Создание коллекции
+    document.getElementById('create-collection-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('name');
+        const descriptionInput = document.getElementById('description');
+        const name = nameInput.value.trim();
+        const description = descriptionInput.value.trim();
+
+        if (!name) {
+            document.getElementById('message').innerHTML = '<span style="color:red">Название обязательно</span>';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/collections/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ name, description })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                document.getElementById('message').innerHTML = '<span style="color:green">Коллекция создана</span>';
+                nameInput.value = '';
+                descriptionInput.value = '';
+                loadCollections(); // обновить список
+            } else {
+                document.getElementById('message').innerHTML = `<span style="color:red">Ошибка: ${data.detail || 'Неизвестная ошибка'}</span>`;
+            }
+        } catch (err) {
+            document.getElementById('message').innerHTML = `<span style="color:red">Ошибка: ${err.message}</span>`;
+        }
+    };
+
+    // Экранирование HTML
+    function escapeHtml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe.replace(/[&<>"']/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            if (m === '"') return '&quot;';
+            if (m === "'") return '&#039;';
+            return m;
+        });
+    }
+
+    // Загрузить коллекции при старте
+    loadCollections();
+</script>
+{% endblock %}

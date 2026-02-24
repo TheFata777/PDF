@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Добро пожаловать в PDF Knowledge Engine</h1>
+
+<div style="display: flex; gap: 20px;">
+    <div style="flex: 1;">
+        <h2>Вход</h2>
+        <form id="login-form">
+            <div>
+                <label>Email:</label>
+                <input type="email" id="login-email" required>
+            </div>
+            <div>
+                <label>Пароль:</label>
+                <input type="password" id="login-password" required>
+            </div>
+            <button type="submit">Войти</button>
+        </form>
+        <div id="login-message"></div>
+    </div>
+
+    <div style="flex: 1;">
+        <h2>Регистрация</h2>
+        <form id="register-form">
+            <div>
+                <label>Email:</label>
+                <input type="email" id="register-email" required>
+            </div>
+            <div>
+                <label>Пароль:</label>
+                <input type="password" id="register-password" required>
+            </div>
+            <button type="submit">Зарегистрироваться</button>
+        </form>
+        <div id="register-message"></div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('login-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+
+        const formData = new URLSearchParams();
+        formData.append('username', email);
+        formData.append('password', password);
+
+        const response = await fetch('/auth/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+            localStorage.setItem('access_token', result.access_token);
+            window.location.href = '/dashboard';
+        } else {
+            document.getElementById('login-message').innerHTML = `<div class="error">${result.detail || 'Ошибка входа'}</div>`;
+        }
+    };
+
+    document.getElementById('register-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+
+        const response = await fetch('/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+            document.getElementById('register-message').innerHTML = `<div class="success">Регистрация успешна! Теперь войдите.</div>`;
+        } else {
+            document.getElementById('register-message').innerHTML = `<div class="error">${result.detail || 'Ошибка регистрации'}</div>`;
+        }
+    };
+</script>
+{% endblock %}

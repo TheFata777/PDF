@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+.env
+
+# Backend
+backend/__pycache__/
+backend/*.db
+backend/static/
+uploads/
+
+# Docker
+*.log
+*.pid
+*.pid.lock
+
+# IDE
+.vscode/
+.idea/

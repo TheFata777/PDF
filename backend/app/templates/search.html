@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Поиск по документам</h1>
+
+<div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <input type="text" id="query" placeholder="Введите запрос..." style="flex-grow: 1;">
+        <button id="search-btn">Искать</button>
+        <button id="export-btn">Экспорт</button>
+    </div>
+    <!--
+    <div style="margin: 10px 0;">
+    <label>
+        <input type="radio" name="search_type" value="text" checked> Текстовый поиск
+    </label>
+    <label>
+        <input type="radio" name="search_type" value="semantic"> Семантический поиск
+    </label>
+    -->
+</div>
+    <div style="display: flex; gap: 20px; align-items: center;">
+        <div>
+            <label for="doc-select">Документ:</label>
+            <select id="doc-select">
+                <option value="">Все документы</option>
+            </select>
+        </div>
+        <div>
+            <label for="collection-select">Коллекция:</label>
+            <select id="collection-select">
+                <option value="">Все коллекции</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+<div id="results"></div>
+
+<style>
+    button { padding: 5px 10px; cursor: pointer; }
+    .error { color: red; }
+    pre { white-space: pre-wrap; background: #f5f5f5; padding: 10px; border-radius: 5px; }
+    .result-item { margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+</style>
+
+<script>
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        window.location.href = '/';
+    }
+
+    const queryInput = document.getElementById('query');
+    const docSelect = document.getElementById('doc-select');
+    const collectionSelect = document.getElementById('collection-select');
+    const resultsDiv = document.getElementById('results');
+    const searchTypeRadios = document.getElementsByName('search_type');
+
+    // Загрузка списка документов
+    async function loadDocuments() {
+        try {
+            const response = await fetch('/documents/', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const docs = await response.json();
+            docSelect.innerHTML = '<option value="">Все документы</option>';
+            docs.forEach(doc => {
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = `${doc.filename} (${doc.status})`;
+                docSelect.appendChild(option);
+            });
+        } catch (err) {
+            console.error('Error loading documents:', err);
+        }
+    }
+
+    // Загрузка списка коллекций
+    async function loadCollections() {
+        try {
+            const response = await fetch('/api/collections/', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const collections = await response.json();
+            collectionSelect.innerHTML = '<option value="">Все коллекции</option>';
+            collections.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c.id;
+                option.textContent = c.name || 'Без названия';
+                collectionSelect.appendChild(option);
+            });
+        } catch (err) {
+            console.error('Error loading collections:', err);
+        }
+    }
+
+    // Поиск
+    async function performSearch() {
+        const query = queryInput.value.trim();
+        if (!query) return;
+
+        // Определяем тип поиска
+        let searchType = 'text';
+        for (let radio of searchTypeRadios) {
+            if (radio.checked) {
+                searchType = radio.value;
+                break;
+            }
+        }
+
+        const docId = docSelect.value;
+        const collectionId = collectionSelect.value;
+
+        let url = `/search/?q=${encodeURIComponent(query)}`;
+
+        if (collectionId) {
+            url += `&collection_id=${collectionId}`;
+        } else if (docId) {
+            url += `&doc_id=${docId}`;
+        }
+
+        try {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.detail || 'Ошибка поиска');
+            }
+            const data = await response.json();
+            displayResults(data.results);
+        } catch (err) {
+            resultsDiv.innerHTML = `<p class="error">Ошибка: ${err.message}</p>`;
+        }
+    }
+
+    // Отображение результатов
+    function displayResults(results) {
+        if (results.length === 0) {
+            resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
+            return;
+        }
+
+        let html = '<h2>Результаты:</h2>';
+        results.forEach(item => {
+            const percent = Math.round(item.rank * 100);
+            html += `
+                <div class="result-item">
+                    <strong>${escapeHtml(item.document_name)}</strong> (стр. ${item.page_number})<br>
+                    <small>Релевантность: ${percent}%</small>
+                    <pre>${escapeHtml(item.content)}</pre>
+                </div>
+            `;
+        });
+        resultsDiv.innerHTML = html;
+    }
+
+    // Экспорт
+    document.getElementById('export-btn').onclick = () => {
+        const query = queryInput.value.trim();
+        if (!query) return;
+
+        let searchType = 'text';
+        for (let radio of searchTypeRadios) {
+            if (radio.checked) {
+                searchType = radio.value;
+                break;
+            }
+        }
+
+        const docId = docSelect.value;
+        const collectionId = collectionSelect.value;
+
+        let url = `/search/export?q=${encodeURIComponent(query)}&token=${encodeURIComponent(token)}`;
+        if (collectionId) {
+            url += `&collection_id=${collectionId}`;
+        } else if (docId) {
+            url += `&doc_id=${docId}`;
+        }
+        window.open(url, '_blank');
+    };
+
+    // Поиск по кнопке и Enter
+    document.getElementById('search-btn').onclick = performSearch;
+    queryInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+
+    // Экранирование HTML
+    function escapeHtml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe.replace(/[&<>"']/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            if (m === '"') return '&quot;';
+            if (m === "'") return '&#039;';
+            return m;
+        });
+    }
+
+    // Инициализация
+    loadDocuments();
+    loadCollections();
+</script>
+{% endblock %}

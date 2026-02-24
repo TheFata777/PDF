@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: pdf_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6380:6379"
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: postgresql://user:pass@db:5432/pdf_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: your-super-secret-key-change-in-production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    mem_limit: 2g
+    mem_reservation: 1g
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: postgresql://user:pass@db:5432/pdf_db
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    mem_limit: 2g
+    mem_reservation: 1g
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+volumes:
+  postgres_data:

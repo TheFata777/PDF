@@ -1,0 +1,23 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+celery[redis]
+redis
+pdfplumber
+python-multipart
+python-dotenv
+pydantic-settings
+jinja2
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart  # уже есть, нужен для форм
+email-validator
+bcrypt==4.0.1
+passlib==1.7.4
+PyMuPDF
+yake
+sentence-transformers
+torch
+torchvision
+torchaudio

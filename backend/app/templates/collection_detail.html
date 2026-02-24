@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Коллекция: <span id="collection-name"></span></h1>
+<p id="collection-description"></p>
+
+<div>
+    <h2>Документы в коллекции</h2>
+    <div id="documents-in-collection"></div>
+</div>
+
+<hr>
+
+<div>
+    <h2>Добавить документ в коллекцию</h2>
+    <select id="document-select">
+        <option value="">Выберите документ</option>
+    </select>
+    <button onclick="addDocument()">Добавить</button>
+    <div id="add-message"></div>
+</div>
+<div style="margin: 20px 0;">
+    <h3>Поиск внутри этой коллекции</h3>
+    <div style="display: flex; gap: 10px;">
+        <input type="text" id="collection-search-query" placeholder="Введите запрос..." style="flex-grow: 1;">
+        <button id="collection-search-btn">Искать</button>
+    </div>
+</div>
+
+<p><a href="/collections">← Назад к коллекциям</a></p>
+
+<script>
+    console.log('Collection detail page loaded');
+    const token = localStorage.getItem('access_token');
+    console.log('Token from localStorage:', token ? token.substring(0,20)+'...' : 'null');
+    if (!token) {
+        console.log('No token, redirecting to /');
+        window.location.href = '/';
+    }
+
+    const pathParts = window.location.pathname.split('/');
+    const collectionId = pathParts[2];
+    console.log('Collection ID from URL:', collectionId);
+
+    const collectionNameSpan = document.getElementById('collection-name');
+    const collectionDescSpan = document.getElementById('collection-description');
+    const documentsDiv = document.getElementById('documents-in-collection');
+    const docSelect = document.getElementById('document-select');
+
+    document.getElementById('collection-search-btn').onclick = () => {
+        const query = document.getElementById('collection-search-query').value.trim();
+        if (!query) return;
+        window.location.href = `/search?q=${encodeURIComponent(query)}&collection_id=${collectionId}`;
+    };
+
+    document.getElementById('collection-search-query').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('collection-search-btn').click();
+        }
+    });
+
+    async function loadCollection() {
+        console.log('Fetching collection data...');
+        try {
+            const response = await fetch(`/api/collections/${collectionId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            const collection = await response.json();
+            console.log('Collection data:', collection);
+
+            // Устанавливаем название и описание с проверкой
+            collectionNameSpan.textContent = collection.name || 'Без названия';
+            collectionDescSpan.textContent = collection.description || '(нет описания)';
+
+            // Загружаем все документы пользователя
+            const docsResponse = await fetch('/documents/', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!docsResponse.ok) {
+                throw new Error(`HTTP error ${docsResponse.status}`);
+            }
+            const allDocs = await docsResponse.json();
+            console.log('All docs:', allDocs);  // Смотрим, что приходит
+
+            // Фильтруем документы, которые уже в коллекции
+            const docIdsInCollection = collection.documents || [];
+            const docsInCollection = allDocs.filter(d => docIdsInCollection.includes(d.id));
+            const availableDocs = allDocs.filter(d => !docIdsInCollection.includes(d.id));
+
+            docSelect.innerHTML = '<option value="">Выберите документ</option>';
+            availableDocs.forEach(d => {
+                const option = document.createElement('option');
+                option.value = d.id;
+                option.textContent = d.filename || 'Без имени';  // с проверкой
+                docSelect.appendChild(option);
+            });
+
+            if (docsInCollection.length === 0) {
+                documentsDiv.innerHTML = '<p>В коллекции нет документов.</p>';
+            } else {
+                let html = '<ul>';
+                docsInCollection.forEach(d => {
+                    html += `<li>
+                        ${d.filename || 'Без имени'}
+                        <button onclick="removeDocument(${d.id})">Удалить</button>
+                    </li>`;
+                });
+                html += '</ul>';
+                documentsDiv.innerHTML = html;
+            }
+        } catch (err) {
+            console.error('Error loading collection:', err);
+            documentsDiv.innerHTML = `<p class="error">Ошибка загрузки: ${err.message}</p>`;
+        }
+    }
+
+    async function addDocument() {
+        const docId = docSelect.value;
+        if (!docId) return;
+        const response = await fetch(`/api/collections/${collectionId}/documents/${docId}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            document.getElementById('add-message').innerHTML = '<span style="color:green">Документ добавлен</span>';
+            loadCollection();
+        } else {
+            const data = await response.json();
+            document.getElementById('add-message').innerHTML = `<span style="color:red">Ошибка: ${data.detail}</span>`;
+        }
+    }
+
+    async function removeDocument(docId) {
+        if (!confirm('Удалить документ из коллекции?')) return;
+        const response = await fetch(`/api/collections/${collectionId}/documents/${docId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) loadCollection();
+        else alert('Ошибка удаления');
+    }
+
+    function escapeHtml(unsafe) {
+        return unsafe.replace(/[&<>"']/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            if (m === '"') return '&quot;';
+            if (m === "'") return '&#039;';
+            return m;
+        });
+    }
+
+    loadCollection();
+</script>
+{% endblock %}

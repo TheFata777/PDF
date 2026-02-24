@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Мои документы</h1>
+
+<div>
+    <h2>Загрузить PDF</h2>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="file" accept=".pdf" required>
+        <button type="submit">Загрузить</button>
+    </form>
+    <div id="upload-message"></div>
+</div>
+
+<hr>
+
+<h2>Список документов</h2>
+<table id="documents-table">
+    <thead>
+        <tr>
+            <th>Имя файла</th>
+            <th>Размер</th>
+            <th>Статус</th>
+            <th>Дата загрузки</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody id="documents-body">
+        <!-- Данные подгружаются через JS -->
+    </tbody>
+</table>
+
+<style>
+    .action-cell button {
+        margin-right: 5px;
+        padding: 5px 10px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 13px;
+    }
+    .view-pdf {
+        background-color: #4CAF50;
+        color: white;
+    }
+    .view-text {
+        background-color: #2196F3;
+        color: white;
+    }
+    .delete-btn {
+        background-color: #f44336;
+        color: white;
+    }
+    .success { color: green; }
+    .error { color: red; }
+</style>
+
+<script>
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        window.location.href = '/';
+    }
+
+    // Функция загрузки списка документов
+    async function loadDocuments() {
+        try {
+            const response = await fetch('/documents/', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            const docs = await response.json();
+            console.log('Documents loaded:', docs);
+
+            const tbody = document.getElementById('documents-body');
+            tbody.innerHTML = '';
+
+            docs.forEach(doc => {
+                const row = tbody.insertRow();
+                row.insertCell().textContent = doc.filename;
+                row.insertCell().textContent = doc.file_size ? (doc.file_size / 1024).toFixed(2) + ' KB' : '-';
+                row.insertCell().textContent = doc.status;
+                row.insertCell().textContent = new Date(doc.uploaded_at).toLocaleString();
+
+                // Ячейка с действиями
+                const actionCell = row.insertCell();
+                actionCell.className = 'action-cell';
+
+                // Кнопка PDF
+                const viewPdfBtn = document.createElement('button');
+                viewPdfBtn.textContent = 'PDF';
+                viewPdfBtn.className = 'view-pdf';
+                viewPdfBtn.onclick = () => window.open(`/documents/${doc.id}/file?token=${encodeURIComponent(token)}`, '_blank');
+                actionCell.appendChild(viewPdfBtn);
+
+                // Кнопка Текст
+                const viewTextBtn = document.createElement('button');
+                viewTextBtn.textContent = 'Текст';
+                viewTextBtn.className = 'view-text';
+                viewTextBtn.onclick = () => window.location.href = `/documents/${doc.id}/text-view?token=${encodeURIComponent(token)}`;
+                actionCell.appendChild(viewTextBtn);
+
+                // Кнопка Удалить
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Удалить';
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.onclick = () => deleteDocument(doc.id);
+                actionCell.appendChild(deleteBtn);
+            });
+        } catch (err) {
+            console.error('Error loading documents:', err);
+            document.getElementById('documents-body').innerHTML = `<tr><td colspan="5" style="color: red;">Ошибка загрузки: ${err.message}</td></tr>`;
+        }
+    }
+
+    // Функция удаления документа
+    async function deleteDocument(id) {
+        if (!confirm('Удалить документ?')) return;
+        try {
+            const response = await fetch(`/documents/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                loadDocuments(); // перезагружаем список
+            } else {
+                const data = await response.json();
+                alert(`Ошибка: ${data.detail || 'Не удалось удалить документ'}`);
+            }
+        } catch (err) {
+            alert(`Ошибка: ${err.message}`);
+        }
+    }
+
+    // Обработка формы загрузки
+    document.getElementById('upload-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('file');
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/documents/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            const result = await response.json();
+            if (response.ok) {
+                document.getElementById('upload-message').innerHTML = `<div class="success">Файл загружен, статус: ${result.status}</div>`;
+                fileInput.value = '';
+                loadDocuments(); // обновляем список
+            } else {
+                document.getElementById('upload-message').innerHTML = `<div class="error">${result.detail || 'Ошибка загрузки'}</div>`;
+            }
+        } catch (err) {
+            document.getElementById('upload-message').innerHTML = `<div class="error">Ошибка: ${err.message}</div>`;
+        }
+    };
+
+    // Загружаем документы сразу и каждые 5 секунд обновляем статусы
+    loadDocuments();
+    setInterval(loadDocuments, 5000);
+</script>
+{% endblock %}

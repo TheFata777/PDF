@@ -6,7 +6,7 @@
 ### Запуск локально
 1. Клонируйте репозиторий:
    ```bash
-   git clone <url-репозитория>
+   git clone https://github.com/TheFata777/PDF.git
    cd pdf-knowledge-engine
    ```
 2. Запустите контейнеры:

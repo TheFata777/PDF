@@ -33,10 +33,16 @@
 ### 12. Доступ из интернета
 - **localtunnel** – легко использовать для временного показа.
 
+```mermaid
 graph TD
-  A[Браузер] -->|HTTP| B[Backend FastAPI]
-  B -->|SQL| C[(PostgreSQL)]
-  B -->|задачи| D[(Redis)]
-  D -->|обработка| E[Celery Worker]
-  E -->|чтение/запись| C
-  E -->|чтение PDF| F[uploads/]
+    Client[Браузер] -->|HTTP| Backend[Backend FastAPI]
+    Backend -->|HTML + JS| Client
+    Backend -->|SQL| PostgreSQL[(PostgreSQL)]
+    Backend -->|задачи| Redis[(Redis)]
+    Redis -->|очередь| Worker[Celery Worker]
+    Worker -->|чтение/запись| PostgreSQL
+    Worker -->|чтение PDF| Uploads[uploads/ на хосте]
+    Backend -->|чтение/запись файлов| Uploads
+    Backend -->|логи| Logs[logs/ на хосте]
+    Worker -->|логи| Logs
+```

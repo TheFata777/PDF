@@ -32,3 +32,11 @@
 
 ### 12. Доступ из интернета
 - **localtunnel** – легко использовать для временного показа.
+
+graph TD
+  A[Браузер] -->|HTTP| B[Backend FastAPI]
+  B -->|SQL| C[(PostgreSQL)]
+  B -->|задачи| D[(Redis)]
+  D -->|обработка| E[Celery Worker]
+  E -->|чтение/запись| C
+  E -->|чтение PDF| F[uploads/]
